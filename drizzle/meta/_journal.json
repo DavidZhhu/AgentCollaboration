@@ -1,0 +1,34 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1793924292243,
+      "tag": "0000_fancy_excalibur",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1793925188778,
+      "tag": "0001_nosy_tyger_tiger",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1793925645988,
+      "tag": "0002_nebulous_night_nurse",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1793979797504,
+      "tag": "0003_legal_tarot",
+      "breakpoints": true
+    }
+  ]
+}
