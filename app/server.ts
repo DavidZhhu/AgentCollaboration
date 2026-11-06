@@ -1,6 +1,10 @@
 const json = (value: unknown, status = 200) =>
   Response.json(value, { status, headers: { "Cache-Control": "no-store" } });
 const id = () => crypto.randomUUID();
+const createAgentToken = () =>
+  "ac_" +
+  crypto.randomUUID().replaceAll("-", "") +
+  crypto.randomUUID().replaceAll("-", "");
 const isPm = (agent: any) =>
   agent.role === "R0" || agent.role === "Product manager";
 async function hash(token: string) {
@@ -345,12 +349,23 @@ export async function handle(
           .run();
         break;
       }
+      case "reset_agent_token": {
+        if (agent) return json({ error: "Human access required." }, 403);
+        const agentId = required(body.agent_id, "an agent", 100);
+        const token = createAgentToken();
+        const updated = await db
+          .prepare(
+            "UPDATE agents SET token_hash=?,worker_id=NULL,worker_seen=NULL,worker_status='stopped',worker_error='',last_seen=NULL WHERE id=? AND project_id=? AND deleted_at IS NULL RETURNING id",
+          )
+          .bind(await hash(token), agentId, projectId)
+          .first();
+        if (!updated)
+          return json({ error: "Agent connection not found." }, 404);
+        return json({ ok: true, agent_id: agentId, token });
+      }
       case "agent": {
         if (agent) return json({ error: "Human access required." }, 403);
-        const token =
-          "ac_" +
-          crypto.randomUUID().replaceAll("-", "") +
-          crypto.randomUUID().replaceAll("-", "");
+        const token = createAgentToken();
         const agentId = id();
         const provider = required(body.provider, "a provider", 30);
         if (!["Codex", "Claude Code"].includes(provider))
