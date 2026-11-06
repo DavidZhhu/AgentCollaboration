@@ -61,7 +61,7 @@ export default function Login() {
       });
       const data = (await readApiResponse(response)) as any;
       if (!response.ok) throw new Error(data.error);
-      window.location.replace("/");
+      window.location.replace(mode === "invite" || new URLSearchParams(window.location.search).get("next") === "setup" ? "/setup" : "/");
     } catch (e: any) {
       setError(e.message);
     } finally {

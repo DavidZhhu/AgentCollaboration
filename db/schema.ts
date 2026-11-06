@@ -16,6 +16,7 @@ export const agents = sqliteTable("agents", {
   role: text("role").notNull(),
   provider: text("provider").notNull(),
   responsibility: text("responsibility").notNull().default(""),
+  accountId: text("account_id").references(() => accounts.id),
   workerId: text("worker_id"),
   workerSeen: integer("worker_seen"),
   workerStatus: text("worker_status").notNull().default("stopped"),
@@ -93,4 +94,23 @@ export const workerReceipts = sqliteTable("worker_receipts", {
     .references(() => agents.id),
   requestHash: text("request_hash").notNull(),
   createdAt: integer("created_at").notNull(),
+});
+
+export const setupGrants = sqliteTable("setup_grants", {
+  codeHash: text("code_hash").primaryKey(),
+  agentId: text("agent_id").notNull().references(() => agents.id),
+  provider: text("provider").notNull(),
+  sessionMode: text("session_mode").notNull(),
+  sessionId: text("session_id").notNull().default(""),
+  folder: text("folder").notNull(),
+  cloneRepo: integer("clone_repo").notNull().default(1),
+  expiresAt: integer("expires_at").notNull(),
+});
+export const setupChecks = sqliteTable("setup_checks", {
+  agentId: text("agent_id").primaryKey().references(() => agents.id),
+  nonce: text("nonce").notNull(),
+  status: text("status").notNull().default("pending"),
+  summary: text("summary").notNull().default(""),
+  createdAt: integer("created_at").notNull(),
+  completedAt: integer("completed_at"),
 });

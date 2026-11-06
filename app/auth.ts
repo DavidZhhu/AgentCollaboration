@@ -270,7 +270,7 @@ export async function auth(
     if (body.action === "members") {
       const members = await db
         .prepare(
-          "SELECT id,username,role,enabled,created_at,password_hash IS NOT NULL AS activated FROM accounts ORDER BY created_at",
+          "SELECT id,username,role,enabled,created_at,password_hash IS NOT NULL AS activated, (SELECT role FROM agents WHERE account_id=accounts.id AND deleted_at IS NULL LIMIT 1) AS agent_role FROM accounts ORDER BY created_at",
         )
         .all();
       return reply({ members: members.results });
@@ -278,19 +278,22 @@ export async function auth(
     if (body.action === "create_invite") {
       const name = username(body.username);
       const token = randomToken();
+      const accountId = crypto.randomUUID();
+      const assignedAgent = typeof body.agent_id === "string" ? body.agent_id : "";
+      if (!assignedAgent) return reply({ error: "Choose the teammate’s assigned agent role first." }, 400);
+      const available = await db.prepare("SELECT agents.id FROM agents JOIN projects ON projects.id=agents.project_id WHERE agents.id=? AND agents.deleted_at IS NULL AND projects.deleted_at IS NULL AND agents.account_id IS NULL AND agents.worker_id IS NULL").bind(assignedAgent).first();
+      if (!available) return reply({ error: "Choose an unassigned agent without a running worker." }, 409);
       try {
-        await db
-          .prepare(
-            "INSERT INTO accounts (id,username,role,invite_hash,invite_expires,enabled,created_at) VALUES (?,?,'member',?,?,1,?)",
-          )
-          .bind(
-            crypto.randomUUID(),
-            name,
-            await tokenHash(token),
-            now + INVITE_DURATION,
-            now,
-          )
-          .run();
+        await db.batch([
+          db.prepare("INSERT INTO accounts (id,username,role,invite_hash,invite_expires,enabled,created_at) VALUES (?,?,'member',?,?,1,?)")
+            .bind(accountId, name, await tokenHash(token), now + INVITE_DURATION, now),
+          db.prepare("UPDATE agents SET account_id=? WHERE id=? AND account_id IS NULL AND worker_id IS NULL").bind(accountId, assignedAgent),
+        ]);
+        const assigned = await db.prepare("SELECT id FROM agents WHERE id=? AND account_id=?").bind(assignedAgent, accountId).first();
+        if (!assigned) {
+          await db.prepare("DELETE FROM accounts WHERE id=?").bind(accountId).run();
+          return reply({error: "This role was just assigned to someone else. Choose another role."}, 409);
+        }
       } catch {
         return reply({ error: "That username is already in use." }, 409);
       }
@@ -299,6 +302,12 @@ export async function auth(
         invite_token: token,
         expires_at: now + INVITE_DURATION,
       });
+    }
+    if (body.action === "assign_role") {
+      const assigned = await db.prepare("UPDATE agents SET account_id=? WHERE id=? AND account_id IS NULL AND worker_id IS NULL AND deleted_at IS NULL AND EXISTS (SELECT 1 FROM accounts WHERE id=? AND role='member' AND enabled=1) AND EXISTS (SELECT 1 FROM projects WHERE projects.id=agents.project_id AND projects.deleted_at IS NULL) RETURNING id")
+        .bind(body.account_id, body.agent_id, body.account_id).first();
+      if (!assigned) return reply({error: "Choose an enabled teammate and an available agent without a running worker."}, 409);
+      return reply({ok: true});
     }
     if (body.action === "reset_invite") {
       const token = randomToken();

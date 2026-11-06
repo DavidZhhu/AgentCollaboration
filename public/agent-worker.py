@@ -177,7 +177,7 @@ class Worker:
             except (OSError, ValueError) as problem:
                 self.log('Heartbeat will retry: ' + str(problem))
 
-    def run_agent(self, prompt):
+    def run_agent(self, prompt, read_only=False):
         self.status, self.problem = 'running', ''
         with tempfile.TemporaryDirectory(prefix='turn-', dir=self.folder) as temp:
             schema_path = Path(temp) / 'schema.json'
@@ -185,15 +185,27 @@ class Worker:
             schema_path.write_text(json.dumps(OUTPUT_SCHEMA))
             provider = self.config.get('provider', 'codex')
             engine = 'Claude Code' if provider == 'claude' else 'Codex'
+            persistent = self.config.get('session_mode') in ('new', 'existing')
+            session_id = self.state.get('session_id') or self.config.get('session_id')
             if provider == 'claude':
-                command = [self.config['claude'], '-p', '--no-session-persistence',
-                           '--permission-prompts', 'none', '--output-format', 'json',
-                           '--json-schema', json.dumps(OUTPUT_SCHEMA)]
+                command = [self.config['claude'], '-p', '--permission-mode', 'dontAsk', '--permission-prompts', 'none',
+                           '--output-format', 'json', '--json-schema', json.dumps(OUTPUT_SCHEMA)]
+                if read_only:
+                    command += ['--tools', '']
+                if session_id:
+                    command += ['--resume', session_id]
+                elif persistent:
+                    command += ['--session-id', str(uuid.uuid4())]
+                else:
+                    command += ['--no-session-persistence']
             else:
-                command = [self.config['codex'], 'exec', '--ephemeral', '--json',
-                           '--sandbox', 'workspace-write', '--skip-git-repo-check',
-                           '--output-schema', str(schema_path),
-                           '--output-last-message', str(output_path), '-']
+                command = [self.config['codex'], 'exec', '--sandbox', 'read-only' if read_only else 'workspace-write']
+                if session_id:
+                    command += ['resume', session_id]
+                elif not persistent:
+                    command += ['--ephemeral']
+                command += ['--json', '--skip-git-repo-check', '--output-schema', str(schema_path),
+                            '--output-last-message', str(output_path), '-']
             log_path = self.folder / (provider + '-last-turn.log')
             environment = os.environ.copy()
             environment.pop('AGENTCOLLAB_TOKEN', None)
@@ -219,17 +231,29 @@ class Worker:
                     raw_output.flush()
                     if provider == 'claude':
                         log.write((Path(temp) / 'stdout.json').read_text()[:4000])
-                    raise RuntimeError(engine + ' exited with code ' + str(self.child.returncode) + '. See ' + log_path.name + '.')
+                    raise RuntimeError(engine + ' exited with code ' + str(self.child.returncode) + '. Check login, CLI version, and session ID; close any active turn. For a missing local session, choose a new session in the wizard. See ' + log_path.name + '.')
             if provider == 'claude':
                 envelope = json.loads((Path(temp) / 'stdout.json').read_text())
                 if envelope.get('is_error'):
                     raise RuntimeError('Claude Code could not complete the turn: ' + str(envelope.get('result', envelope.get('subtype', 'unknown error')))[:300])
+                if persistent and envelope.get('session_id'):
+                    self.state['session_id'] = envelope['session_id']
+                    self.persist()
                 result = envelope.get('structured_output')
                 if result is None:
                     raise RuntimeError('Claude Code did not return structured output. ' + str(envelope.get('result', ''))[:300])
             else:
                 if not output_path.exists():
                     raise RuntimeError('Codex did not return a structured result. See ' + log_path.name + '.')
+                if persistent:
+                    for line in log_path.read_text().splitlines():
+                        try:
+                            event = json.loads(line)
+                        except ValueError:
+                            continue
+                        if event.get('type') == 'thread.started' and event.get('thread_id'):
+                            self.state['session_id'] = event['thread_id']
+                            self.persist()
                 result = json.loads(output_path.read_text())
             if not isinstance(result, dict) or not isinstance(result.get('actions'), list):
                 raise RuntimeError(engine + ' returned an invalid action list.')
@@ -264,6 +288,20 @@ class Worker:
         if self.stop.is_set():
             return
         inbox = self.api.call(cursor=self.state['cursor'])
+        check = inbox.get('setup_check')
+        if check:
+            nonce = check['nonce']
+            result = self.run_agent('Connection test only. Do not use tools, change files, send messages, or perform project work. Return JSON with actions=[] and summary exactly: ' + nonce, read_only=True)
+            if result.get('actions') or result.get('summary', '').strip() != nonce:
+                raise RuntimeError('The AI did not return the expected connection-test reply. Retry the test in the website.')
+            self.api.call({'action': 'setup_check_result', 'nonce': nonce,
+                           'summary': 'AI received the test task and returned the expected reply. No project actions requested.'})
+            self.status, self.problem = 'idle', ''
+            self.log('Website connection test passed.')
+            return
+        if self.config.get('require_setup_test') and not inbox.get('setup_verified'):
+            self.status, self.problem = 'idle', ''
+            return
         incoming = inbox.get('messages', [])
         history = {message['id']: message for message in self.state.get('history', [])}
         history.update({message['id']: message for message in incoming})
@@ -351,6 +389,80 @@ class Worker:
             pass
 
 
+def github_identity(value):
+    value = value.strip().rstrip('/')
+    if value.startswith('git@github.com:'):
+        value = 'https://github.com/' + value.split(':', 1)[1]
+    parsed = parse.urlparse(value)
+    if parsed.scheme not in ('https', 'ssh') or parsed.hostname != 'github.com':
+        return None
+    parts = parsed.path.strip('/').removesuffix('.git').split('/')
+    return '/'.join(parts).lower() if len(parts) == 2 and all(parts) else None
+
+
+def prepare_checkout(repo, folder, clone):
+    if not shutil.which('git'):
+        raise RuntimeError('Git is missing. Install Apple Command Line Tools with xcode-select --install, then retry.')
+    identity = github_identity(repo)
+    if not identity:
+        raise RuntimeError('The project needs a valid GitHub repository URL. Ask the owner to update it.')
+    folder = Path(folder).expanduser().resolve()
+    environment = {**os.environ, 'GIT_TERMINAL_PROMPT': '0'}
+    if not folder.exists() and clone:
+        folder.parent.mkdir(parents=True, exist_ok=True)
+        result = subprocess.run(['git', 'clone', '--', repo, str(folder)], env=environment, timeout=180)
+        if result.returncode:
+            raise RuntimeError('GitHub clone failed. Check your network and GitHub access, then generate a new setup command. Any partial folder has been left for you to inspect.')
+    if not folder.is_dir():
+        raise RuntimeError('The local project folder does not exist. Choose clone or enter an existing checkout.')
+    root = subprocess.run(['git', '-C', str(folder), 'rev-parse', '--show-toplevel'], capture_output=True, text=True, timeout=15)
+    if root.returncode or Path(root.stdout.strip()).resolve() != folder:
+        raise RuntimeError('Choose the root folder of a Git checkout. Existing files have not been changed.')
+    origin = subprocess.run(['git', '-C', str(folder), 'remote', 'get-url', 'origin'], capture_output=True, text=True, timeout=15)
+    if origin.returncode or github_identity(origin.stdout) != identity:
+        raise RuntimeError('This folder belongs to a different GitHub repository. Choose another folder; existing files have not been changed.')
+    return str(folder)
+
+
+def onboard(args):
+    if sys.platform != 'darwin':
+        raise RuntimeError('The setup wizard currently supports macOS only.')
+    if sys.version_info < (3, 10):
+        raise RuntimeError('Install Python 3.10 or later, then retry setup.')
+    site = args.site.rstrip('/')
+    if parse.urlparse(site).scheme != 'https':
+        raise RuntimeError('Use your HTTPS workspace address.')
+    req = request.Request(site + '/api/setup/exchange',
+        data=json.dumps({'code': args.code}).encode(), headers={'Content-Type': 'application/json'})
+    try:
+        with request.urlopen(req, timeout=30) as response:
+            grant = json.load(response)
+    except error.HTTPError as problem:
+        try:
+            detail = json.load(problem).get('error', 'Setup command could not be redeemed.')
+        except (ValueError, AttributeError):
+            detail = 'Setup failed with HTTP ' + str(problem.code)
+        raise RuntimeError(detail) from None
+    provider = grant['provider']
+    executable = shutil.which('claude' if provider == 'claude' else 'codex')
+    if not executable:
+        executable = DEFAULT_CLAUDE if provider == 'claude' else DEFAULT_CODEX
+    if not Path(executable).is_file():
+        raise RuntimeError(('Claude Code' if provider == 'claude' else 'Codex') + ' CLI not found. Install it and sign in, then generate a new command in the wizard.')
+    source = {'site': site, 'token': grant['token'], 'provider': provider,
+              'codex': executable if provider == 'codex' else DEFAULT_CODEX,
+              'claude': executable if provider == 'claude' else DEFAULT_CLAUDE,
+              'session_mode': grant['session_mode'], 'session_id': grant['session_id'],
+              'require_setup_test': True}
+    source['workspace'] = prepare_checkout(grant['repo'], grant['workspace'], grant['clone_repo'])
+    with tempfile.TemporaryDirectory(prefix='agentcollab-setup-') as temp:
+        config_path = Path(temp) / 'config.json'
+        save_json(config_path, source)
+        args.config = str(config_path)
+        install(args)
+    print('Return to the website to verify your connection. Keep your Mac awake and online.')
+
+
 def install(args):
     if sys.platform != 'darwin':
         raise RuntimeError('Automatic service installation currently supports macOS. Use run on other Unix hosts.')
@@ -427,13 +539,18 @@ def main():
     installer.add_argument('--codex',default=DEFAULT_CODEX)
     installer.add_argument('--provider',choices=['codex','claude'],default='codex')
     installer.add_argument('--claude',help='Path to the Claude Code CLI.')
+    onboarding=commands.add_parser('onboard',help='Connect this Mac using a single-use website setup command.')
+    onboarding.add_argument('--site',required=True)
+    onboarding.add_argument('--code',required=True)
     runner=commands.add_parser('run',help='Run in this terminal until interrupted.')
     runner.add_argument('--config',required=True)
     status=commands.add_parser('status',help='Read worker health without changing its heartbeat.')
     status.add_argument('--config',required=True)
     args=parser.parse_args()
     try:
-        if args.command=='install':
+        if args.command=='onboard':
+            onboard(args)
+        elif args.command=='install':
             install(args)
         elif args.command=='status':
             config=load_json(Path(args.config).expanduser(),None)
