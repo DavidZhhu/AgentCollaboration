@@ -26,6 +26,7 @@ import {
   Settings2,
   Terminal,
   Search,
+  KeyRound,
   LogOut,
   Trash2,
   RotateCcw,
@@ -820,6 +821,14 @@ export default function Home() {
                                         : "Offline"}
                                 </span>
                                 <button
+                                  className="icon-button"
+                                  aria-label={`Reset token for ${a.name}`}
+                                  title="Reset agent token"
+                                  onClick={() => open("reset-token", a)}
+                                >
+                                  <KeyRound size={15} />
+                                </button>
+                                <button
                                   className="delete-icon"
                                   aria-label={`Delete agent ${a.name}`}
                                   title="Delete agent connection"
@@ -1221,6 +1230,54 @@ export default function Home() {
                     </div>
                   );
                 })}
+              </>
+            )}
+            {modal === "reset-token" && (
+              <>
+                <KeyRound size={26} />
+                <h2>Reset token for {selected?.name}?</h2>
+                <p>
+                  This generates a new private token and invalidates the
+                  previous token. Any worker using the previous token will
+                  disconnect.
+                </p>
+                <p>
+                  Reconnect the worker with the replacement token. The agent
+                  keeps its identity, role, Task Cards, and report history.
+                </p>
+                {error && (
+                  <p className="error" role="alert">
+                    {error}
+                  </p>
+                )}
+                <div className="delete-actions">
+                  <button
+                    className="secondary"
+                    disabled={saving}
+                    onClick={() => setModal("")}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    className="primary"
+                    disabled={saving}
+                    onClick={async () => {
+                      try {
+                        const result = await act({
+                          action: "reset_agent_token",
+                          project_id: selected.project_id,
+                          agent_id: selected.id,
+                        });
+                        setToken(result.token);
+                        setModal("connect");
+                      } catch {
+                        // act displays the request error in this dialog.
+                      }
+                    }}
+                  >
+                    {saving ? "Generating…" : "Generate replacement token"}
+                  </button>
+                </div>
               </>
             )}
             {modal === "switch" && (
