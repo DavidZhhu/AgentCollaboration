@@ -17,6 +17,8 @@ export const agents = sqliteTable("agents", {
   provider: text("provider").notNull(),
   responsibility: text("responsibility").notNull().default(""),
   accountId: text("account_id").references(() => accounts.id),
+  connectionMode: text("connection_mode").notNull().default("worker"),
+  controllerLabel: text("controller_label").notNull().default(""),
   workerId: text("worker_id"),
   workerSeen: integer("worker_seen"),
   workerStatus: text("worker_status").notNull().default("stopped"),

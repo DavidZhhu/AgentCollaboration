@@ -1,52 +1,53 @@
 # Teammate setup
 
-The owner creates a role in a project, opens **Team accounts**, and assigns that role when creating an invitation. The teammate opens the invitation, sets a password, and lands in `/setup`.
+Each existing conversation should control its assigned role, retaining that conversation’s history and decisions. Use [Current-conversation setup](current-conversation.md) for the complete protocol and recovery commands.
+
+The owner creates a role in the project and assigns it when creating a teammate invitation. An existing member can be assigned a role through Team accounts. An owner can also open `/setup` and connect an unassigned role themselves.
 
 ```mermaid
 flowchart TD
-    A[Owner assigns role and creates invitation] --> B[Teammate sets account password]
-    B --> C[Choose Codex or Claude Code]
-    C --> D{Conversation}
-    D -->|New| E[Dedicated collaboration session]
-    D -->|Existing| F[Local CLI session UUID]
-    E --> G{Project files}
-    F --> G
-    G -->|Clone| H[Clone GitHub repository]
-    G -->|Existing| I[Verify local checkout and origin]
-    H --> J[Install and start Mac worker]
-    I --> J
-    J --> K[Website sends test task]
-    K --> L{AI reply verified?}
-    L -->|Yes| M[Ready for team tasks]
-    L -->|No| N[Show error and recovery steps]
-    N --> D
+    A[Owner assigns role and creates invitation] --> B[Teammate sets password]
+    B --> C[Choose role and provider]
+    C --> D{Connection mode}
+    D -->|Current conversation| E[Select that conversation's existing checkout]
+    E --> F[Run single-use relay configuration command]
+    F --> G[Paste connection prompt into existing conversation]
+    G --> H[Conversation arms a background inbox watch]
+    H --> I[Website sends connection challenge]
+    I --> J{Existing conversation replies?}
+    J -->|Yes| K[Test a unique website message without another prompt]
+    J -->|No| L[Inspect errors or host notification support]
+    L --> H
+    D -->|Advanced worker| M[Clone or select checkout and create or resume CLI transcript]
+    M --> N[Install separate AI worker service]
+    N --> I
 ```
 
-The wizard supplies one Terminal command. It downloads the worker and redeems a single-use setup grant valid for 30 minutes. The durable agent token is returned over HTTPS and saved in the worker’s private configuration; it is not embedded in the copied command. Generating another command invalidates the previous unused grant. Redeeming it rotates the agent token and clears an earlier connection test.
+## What the default command does
 
-The repository is cloned into the selected folder. An existing folder must be a Git root with a matching GitHub origin; setup leaves a mismatched folder unchanged. Private repositories use the teammate’s configured GitHub authentication. The installer validates the provider login before installing a macOS LaunchAgent and prints its log location and stop command. The Mac must remain awake and online to receive work.
+The default **Current conversation** command downloads `agent-session.py`, redeems a single-use grant valid for 30 minutes, validates the existing Git checkout, and stores the credential in a private local configuration. It prints the installed watch/action/ack/status/disconnect commands. It does not launch an AI or install a separate model worker.
 
-New conversations retain their provider session ID across turns and worker restarts. Existing sessions must be local and resumable through the selected provider CLI. A browser conversation link does not provide a resumable CLI transcript. Close another active turn before connecting the same session. A missing transcript, incompatible CLI, denied permission, or expired login is surfaced as a worker error. Resolve the reported issue or stop the worker and generate a command for a new session.
+Paste the supplied prompt into the conversation that should control the role. It runs watch as a background tool. The relay checks about every second and returns immediately on a message, task change, or connection challenge. Its tool-completion notification must reach that same conversation. The model processes the event, uses the helper for website actions, acknowledges the delivered batch, and rearms the watcher. Unknown network outcomes can be retried with the same action identity.
 
-The connection test is a separate challenge, outside the normal task board. The worker asks the selected AI to echo a nonce with an empty action list, using Codex’s read-only sandbox or disabling Claude’s tools. It reports success only after validating the exact AI reply. The server requires the current worker lease and challenge. Requests are idempotent while a challenge is pending; it expires after ten minutes. Newly onboarded workers wait for this verification before starting project work. Verification does not mark any project task complete.
+A configured relay is not proof of an automatic response. Verification requires the existing model to return the setup challenge, then respond to a unique website message without another user prompt. The website displays the measured connection-test round trip, including model response time. **Session watching** describes relay presence; **Session active** describes delivered events or submitted actions. The website refreshes every five seconds.
 
-## Validation
+If the host app cannot wake an idle conversation on a background-tool completion, report the unsupported behaviour rather than silently spawning another model. The session, watcher, computer, and network must remain available. This mode does not guarantee restart after the Desktop app closes. Stop the prior watcher before disconnecting or transferring the role.
 
-Use the locked dependencies with Node.js 22.13 or later; Node.js 24 was used for the SQLite behavior check.
+## Advanced worker mode
+
+The separate-worker modes retain the earlier macOS LaunchAgent installation. They create a dedicated provider session or resume a locally available CLI transcript. They are an explicit alternative: they do not inject events into an already running Desktop chat. The installer checks provider login, validates or clones the GitHub checkout, and prints its service log and stop command. Existing worker configurations remain supported.
+
+## Validation and rollout
 
 ```sh
-node --import tsx tests/onboarding.mjs
+node --import tsx --test tests/*.mjs
 python3 -m unittest discover -s tests -p 'test_*.py'
 npx tsc --noEmit --incremental false
 npm run build
 ```
 
-The automated worker tests use fake CLI executables and do not install a service, call a model API, or connect to a live workspace. They verify session IDs persist and are resumed, test replies are validated, and existing checkouts are protected. API tests apply all SQL migrations to an in-memory SQLite database and cover invitation redemption, account scoping, grants, lease conflicts, and round-trip verification.
+The API checks apply all migrations to in-memory SQLite and cover role assignment, owner access, grant redemption, mode reporting, connection tests, and exclusive controller handovers. Relay tests cover immediate event completion, acknowledgement and restart safety, own-message pagination, private configuration, duplicate watchers, and retry identities. Provider worker tests use fake CLI executables.
 
-Before release, complete a browser walkthrough and a test on a second Mac with both real provider CLIs, including an existing conversation. These remain separate from offline protocol tests.
+Before claiming automatic replies for an interface, complete a real background-completion test in the existing Claude Code Desktop, CLI/editor, or Codex conversation. A passing offline relay test is not proof of that host behaviour. Preserve the original session’s history and verify its response refers to the agreed project context.
 
-## Rollout
-
-After owner approval, apply `drizzle/0004_smooth_purple_man.sql` before deploying the application. It adds nullable `agents.account_id`, `setup_grants`, and `setup_checks`. Existing agent tokens and worker configurations remain compatible; unassigned agents do not enter the new onboarding flow. For an existing member without an assigned agent, use **Assign role** in Team accounts before they open the wizard. Existing workers must install the updated worker to handle connection-test challenges.
-
-Do not mark the rollout complete until a real invitation has been redeemed on a second Mac and the website receives that AI’s connection-test reply. Deployments and merges require explicit owner approval under the repository instructions.
+Deploy after explicit owner approval. Apply pending migrations before the application code. The current-conversation addition is `0006_romantic_ultragirl.sql`; the original setup wizard requires `0004_smooth_purple_man.sql`. Use the deployment platform’s migration tracking and never replay already-applied SQL. Existing live sessions are connected explicitly; a deployment alone does not replace their watchers.

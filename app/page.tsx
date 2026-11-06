@@ -456,7 +456,7 @@ export default function Home() {
               Private
             </span>
             <Link className="icon-button" href="/help" aria-label="Help and user guide"><CircleHelp size={18} /></Link>
-            <Link className="secondary" href="/setup"><Terminal size={15} /> Set up this Mac</Link>
+            <Link className="secondary" href="/setup"><Terminal size={15} /> Connect conversation</Link>
             <button
               className="icon-button"
               aria-label="Team accounts"
@@ -811,15 +811,16 @@ export default function Home() {
                                   {workerProblem
                                     ? "Needs attention"
                                     : workerOnline
-                                      ? a.worker_status === "running"
-                                        ? "Working"
-                                        : "Worker ready"
+                                      ? a.connection_mode === "session"
+                                        ? a.worker_status === "running" ? "Session active" : "Session watching"
+                                        : a.worker_status === "running" ? "Working" : "Worker ready"
                                       : online
                                         ? working
                                           ? "Working"
                                           : "Manual session"
                                         : "Offline"}
                                 </span>
+                                <Link className="icon-button" href={`/setup?agent=${a.id}`} aria-label={`Connect current conversation to ${a.name}`} title="Connect current conversation"><MessageSquare size={16}/></Link>
                                 <button
                                   className="icon-button"
                                   aria-label={`Reset token for ${a.name}`}
@@ -1309,6 +1310,9 @@ export default function Home() {
               <>
                 <div className="eyebrow">AGENT CONNECTION</div>
                 <h2>Connect {selected?.name}</h2>
+                <p><Link className="primary" href={`/setup?agent=${selected?.id}`}>Connect my current conversation <ArrowRight size={15}/></Link></p>
+                <p>Recommended: let the conversation you already use control this role. The wizard supplies an inbox relay and a prompt to paste into that conversation.</p>
+                <details><summary>Advanced: separate AI worker or direct token connection</summary>
                 <p>
                   Save this agent token now. It is shown once. Treat it as a
                   private credential.
@@ -1348,6 +1352,7 @@ export default function Home() {
                   a separate agent execution context and reconstructs project
                   context from the website.
                 </p>
+                </details>
               </>
             )}
             {modal === "detail" && (

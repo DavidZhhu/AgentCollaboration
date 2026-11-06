@@ -2,7 +2,7 @@
 
 A shared workspace for humans and AI agents working on a project from different computers. Visualise project progress, give every task an assigned agent, and keep decisions and conversations together.
 
-Agents run locally through Codex CLI or Claude Code. The website coordinates their work; a background worker on each Mac receives messages and assignments and reports results back.
+Each agent’s existing Claude Code or Codex conversation controls its assigned role and retains its history. A local inbox relay delivers website events through that conversation’s background tools; it never starts another model. An advanced separate-worker option is also available.
 
 [Open the team workspace](https://agentcollaboration-workspace.timelyperch1.chatgpt.site). Joining requires an invitation from the workspace owner.
 
@@ -10,6 +10,7 @@ Agents run locally through Codex CLI or Claude Code. The website coordinates the
 
 | I want to… | Go to… |
 | --- | --- |
+| Connect an existing conversation to its role | [Current-conversation setup](docs/current-conversation.md) |
 | Understand every feature | [Complete user guide](docs/user-guide.md) |
 | Invite a teammate and connect their Mac | [Teammate setup and flowchart](docs/teammate-setup.md) |
 | Try a complete task workflow | [Worked example](docs/user-guide.md#example) |
@@ -35,8 +36,8 @@ On a deployment that includes these changes, choose **User guide** in the sideba
 1. Sign in as the workspace owner and create a project with its GitHub URL and initial goal.
 2. Create R0 for the PM and an R01 specialist. Set each agent’s responsibility.
 3. Connect the PM using its connection instructions. In **Team accounts**, invite the specialist’s teammate and assign R01 to the invitation.
-4. The teammate sets a password, opens **Set up this Mac**, chooses Codex or Claude Code and a new or resumable local conversation, then clones or selects the project checkout.
-5. The teammate runs the generated command and completes the automatic AI connection test.
+4. The teammate sets a password, opens **Connect conversation**, chooses Current conversation and its existing project checkout, then pastes the supplied connection prompt into that conversation.
+5. The teammate configures the relay, arms its background watch in that conversation, and completes the connection challenge and unique-message reply test.
 6. Discuss the goal with R0, queue one clear task, inspect its report, and accept it or request revisions. Handle any GitHub merge and deployment separately under the project’s approval rules.
 
 See the [worked example](docs/user-guide.md#example) for a concrete login-interface task from brief through review.
@@ -47,9 +48,9 @@ See the [worked example](docs/user-guide.md#example) for a concrete login-interf
 | --- | --- |
 | GitHub | Stores each project’s repository URL and PR links in reports. Automatic issue/PR/commit/check synchronisation and task import are not implemented in this version. Agents use their own GitHub tools. |
 | Completion | Accepting a website report does not merge a PR or deploy code. GitHub activity does not automatically update task-card status. |
-| Timing | Workspace updates poll every five seconds. A worker must run on an awake, connected computer. Closing the website is fine; sleeping its worker computer pauses work. |
+| Timing | Workspace updates poll every five seconds. Current-session watches check about once a second; background completion and model response add latency. The session and watcher must remain active on an awake, connected computer. Closing the website is fine; sleeping its worker computer pauses work. |
 | Platforms | Guided background-worker installation supports macOS with Python 3.10+, Git, and a signed-in Codex CLI or Claude Code. The website can be viewed from other computers. |
-| Conversations | Existing sessions must be locally resumable through the provider CLI. A web chat link alone is insufficient. |
+| Conversations | Current conversation mode uses the receiving chat’s own shell/background tools. Automatic delivery must be verified in that interface; it is not guaranteed after the app closes. Advanced CLI-resume mode is separate. |
 | Human access | Owner-only account management; signed-in human members currently share workspace project visibility and project controls. Agent-specific channels route AI messages and remain visible to human workspace members. |
 | GitHub permissions | A PM-only write policy must be followed through the team’s GitHub tooling and repository permissions. The website does not enforce GitHub write access. |
 

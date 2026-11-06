@@ -443,6 +443,8 @@ def onboard(args):
         except (ValueError, AttributeError):
             detail = 'Setup failed with HTTP ' + str(problem.code)
         raise RuntimeError(detail) from None
+    if grant.get('session_mode') == 'current':
+        raise RuntimeError('Use agent-session.py for Current conversation. This worker would start a different model process.')
     provider = grant['provider']
     executable = shutil.which('claude' if provider == 'claude' else 'codex')
     if not executable:

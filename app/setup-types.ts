@@ -3,6 +3,8 @@ export type SetupAgent = {
     name: string;
     role: string;
     provider: string;
+    connection_mode: string;
+    controller_label: string;
     worker_seen: number | null;
     worker_status: string;
     worker_error: string;
