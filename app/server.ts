@@ -37,7 +37,7 @@ export async function handle(
       if (!token) return json({ error: "Agent token required." }, 401);
       agent = await db
         .prepare(
-          "SELECT * FROM agents WHERE token_hash=? AND deleted_at IS NULL AND EXISTS (SELECT 1 FROM projects WHERE projects.id=agents.project_id AND projects.deleted_at IS NULL)",
+          "SELECT * FROM agents WHERE token_hash=? AND deleted_at IS NULL AND EXISTS (SELECT 1 FROM projects WHERE projects.id=agents.project_id AND projects.deleted_at IS NULL) AND (account_id IS NULL OR EXISTS (SELECT 1 FROM accounts WHERE accounts.id=agents.account_id AND accounts.enabled=1))",
         )
         .bind(await hash(token))
         .first();
@@ -106,6 +106,15 @@ export async function handle(
         { error: "A background worker currently controls this agent." },
         409,
       );
+    if (agent && body?.action === "setup_check_result") {
+      if (!workerId || agent.worker_id !== workerId || agent.worker_seen <= now - 45000)
+        return json({ error: "An active worker lease is required." }, 409);
+      const summary = typeof body.summary === "string" ? body.summary.slice(0, 2000) : "";
+      const check = await db.prepare("UPDATE setup_checks SET status='passed',summary=?,completed_at=? WHERE agent_id=? AND nonce=? AND status IN ('pending','passed') AND created_at>? RETURNING agent_id")
+        .bind(summary, now, agent.id, body.nonce, now - 600000).first();
+      if (!check) return json({ error: "This connection test expired or was replaced. Retry in the wizard." }, 409);
+      return json({ ok: true });
+    }
     let operationKey: string | null = null;
     let requestHash: string | null = null;
     if (agent && request.method !== "GET") {
@@ -212,6 +221,8 @@ export async function handle(
           next_card: next,
           messages: msgs.results,
           team,
+          setup_check: await db.prepare("SELECT nonce,created_at FROM setup_checks WHERE agent_id=? AND status='pending' AND created_at>?").bind(agent.id, now - 600000).first(),
+          setup_verified: !!(await db.prepare("SELECT agent_id FROM setup_checks WHERE agent_id=? AND status='passed'").bind(agent.id).first()),
           server_time: now,
         });
       }
@@ -222,7 +233,7 @@ export async function handle(
         .all();
       const agents = await db
         .prepare(
-          "SELECT id,project_id,name,role,provider,responsibility,status,last_seen,worker_id,worker_seen,worker_status,worker_error,created_at FROM agents WHERE deleted_at IS NULL ORDER BY created_at",
+          "SELECT id,project_id,name,role,provider,responsibility,account_id,status,last_seen,worker_id,worker_seen,worker_status,worker_error,created_at FROM agents WHERE deleted_at IS NULL ORDER BY created_at",
         )
         .all();
       const deletedProjects = await db

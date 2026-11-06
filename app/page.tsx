@@ -32,6 +32,7 @@ import {
   RotateCcw,
 } from "lucide-react";
 import "./workspace.css";
+import Link from "next/link";
 import { readApiResponse } from "./api-response";
 const empty = {
   projects: [],
@@ -183,6 +184,7 @@ export default function Home() {
           `${window.location.origin}/login#invite=${result.invite_token}`,
         );
       await loadMembers();
+      await refresh();
     } catch (e: any) {
       setError(e.message);
     } finally {
@@ -458,6 +460,7 @@ export default function Home() {
             >
               <CircleHelp size={18} />
             </button>
+            <Link className="secondary" href="/setup"><Terminal size={15} /> Set up this Mac</Link>
             <button
               className="icon-button"
               aria-label="Team accounts"
@@ -1451,11 +1454,7 @@ export default function Home() {
                 </p>
                 {data.account_role === "owner" ? (
                   <>
-                    <p>
-                      Choose a username for your teammate. Share their
-                      invitation link so they can set their own password. Links
-                      expire after 48 hours.
-                    </p>
+                    <p>Assign an agent role, then invite your teammate. They’ll choose their AI provider and connect their Mac in the setup wizard. Links expire after 48 hours.</p>
                     <form
                       onSubmit={async (event) => {
                         event.preventDefault();
@@ -1464,6 +1463,7 @@ export default function Home() {
                         await memberAction({
                           action: "create_invite",
                           username: fields.username,
+                          agent_id: fields.agent_id,
                         });
                       }}
                     >
@@ -1477,6 +1477,13 @@ export default function Home() {
                           autoComplete="off"
                         />
                       </label>
+                      <label>Assigned agent role
+                        <select name="agent_id" required defaultValue="">
+                          <option value="" disabled>Choose an available role</option>
+                          {data.agents.filter((a: {account_id?: string; worker_id?: string}) => !a.account_id && !a.worker_id).map((a: {id: string; project_id: string; role: string; name: string}) => <option key={a.id} value={a.id}>{data.projects.find((p: {id: string; name: string}) => p.id === a.project_id)?.name} · {a.role} · {a.name}</option>)}
+                        </select>
+                      </label>
+                      <p>Create an agent in the project first if no role is available.</p>
                       <button className="primary form-submit" disabled={saving}>
                         Create invitation
                         <ArrowRight size={14} />
@@ -1513,9 +1520,21 @@ export default function Home() {
                                   ? "Active member"
                                   : "Awaiting password setup"}
                           </small>
+                          {member.agent_role && <small>Assigned role: {member.agent_role}</small>}
                         </span>
                         {member.role !== "owner" && (
                           <>
+                            {!member.agent_role && member.enabled === 1 && <form onSubmit={async event => {
+                              event.preventDefault();
+                              const fields = new FormData(event.currentTarget);
+                              await memberAction({action: "assign_role", account_id: member.id, agent_id: fields.get("agent_id")});
+                            }}>
+                              <select name="agent_id" required aria-label={`Assign role to ${member.username}`} defaultValue="">
+                                <option value="" disabled>Choose role</option>
+                                {data.agents.filter((a: {account_id?: string; worker_id?: string}) => !a.account_id && !a.worker_id).map((a: {id: string; role: string; name: string}) => <option key={a.id} value={a.id}>{a.role} · {a.name}</option>)}
+                              </select>
+                              <button className="secondary" disabled={saving}>Assign role</button>
+                            </form>}
                             <button
                               className="secondary"
                               disabled={saving}

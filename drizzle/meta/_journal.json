@@ -29,6 +29,13 @@
       "when": 1793979797504,
       "tag": "0003_legal_tarot",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1793982269861,
+      "tag": "0004_smooth_purple_man",
+      "breakpoints": true
     }
   ]
 }
