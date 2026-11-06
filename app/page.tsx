@@ -34,6 +34,7 @@ import {
 import "./workspace.css";
 import Link from "next/link";
 import { readApiResponse } from "./api-response";
+import GithubPanel from "../components/github-panel";
 const empty = {
   projects: [],
   deleted_projects: [],
@@ -401,7 +402,7 @@ export default function Home() {
         </nav>
         <div className="sidebar-line" />
         <div className="nav-label">CONNECTIONS</div>
-        <button className="subnav" onClick={() => open("github")}>
+        <button className="subnav" onClick={() => setTab("GitHub")}>
           <Github size={17} />
           GitHub
           <ArrowUpRight size={13} />
@@ -487,7 +488,7 @@ export default function Home() {
                 <span className="live-dot" /> YOUR TEAM, IN SYNC
               </div>
               <h1>
-                {tab === "Overview"
+                {tab === "GitHub" ? "GitHub progress" : tab === "Overview"
                   ? "Project overview"
                   : tab === "Task board"
                     ? "Task board"
@@ -496,7 +497,7 @@ export default function Home() {
                       : "Conversations"}
               </h1>
               <p>
-                {tab === "Overview"
+                {tab === "GitHub" ? "Development activity, review requests, and checks for this project." : tab === "Overview"
                   ? "One place to see what’s moving, what’s next, and what needs you."
                   : tab === "Task board"
                     ? "From a clear brief to reviewed work. Every task has an owner."
@@ -570,6 +571,7 @@ export default function Home() {
             </section>
           ) : (
             <>
+              {(tab === "Overview" || tab === "GitHub") && <GithubPanel key={`${projectId}:${tab}`} projectId={projectId} compact={tab === "Overview"} onExpand={() => setTab("GitHub")} />}
               {tab === "Overview" && (
                 <>
                   <div className="stats">
