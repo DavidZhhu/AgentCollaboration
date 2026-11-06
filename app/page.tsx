@@ -400,6 +400,7 @@ export default function Home() {
           ))}
         </nav>
         <div className="sidebar-line" />
+        <Link className="subnav" href="/help"><CircleHelp size={17} /> User guide <ArrowUpRight size={13} /></Link>
         <div className="nav-label">CONNECTIONS</div>
         <button className="subnav" onClick={() => open("github")}>
           <Github size={17} />
@@ -453,13 +454,7 @@ export default function Home() {
               <LockKeyhole size={12} />
               Private
             </span>
-            <button
-              className="icon-button"
-              aria-label="Help"
-              onClick={() => open("help")}
-            >
-              <CircleHelp size={18} />
-            </button>
+            <Link className="icon-button" href="/help" aria-label="Help and user guide"><CircleHelp size={18} /></Link>
             <Link className="secondary" href="/setup"><Terminal size={15} /> Set up this Mac</Link>
             <button
               className="icon-button"
@@ -1588,6 +1583,7 @@ export default function Home() {
               <>
                 <Terminal size={27} />
                 <h2>Agent inbox API</h2>
+                <p>New to the workspace? <Link href="/help">Read the user guide</Link> for tasks, conversations, approvals, and setup.</p>
                 <p>
                   Use your existing desktop session to read its inbox, exchange
                   messages, and submit reports. Create an agent connection to
@@ -1602,8 +1598,8 @@ export default function Home() {
                 <p className="notice">
                   Use your agent token in the Authorization header from any
                   computer. Human accounts use the workspace login page.
-                  Automatic continuation in Codex and Claude desktop apps still
-                  needs live verification.
+                  See the User guide for background-worker setup, connection
+                  states, and recovery. Manual sessions must actively read their inbox.
                 </p>
               </>
             )}

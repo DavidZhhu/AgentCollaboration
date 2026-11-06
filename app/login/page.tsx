@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { Layers, ArrowRight, LockKeyhole, Eye, EyeOff } from "lucide-react";
 import "../workspace.css";
 import { readApiResponse } from "../api-response";
@@ -170,6 +171,7 @@ export default function Login() {
             : "Your invitation is private. Choose a password you don’t use elsewhere."}
         </div>
       </section>
+      <p><Link href="/help">New here? Read the user guide</Link></p>
       <small className="login-caption">
         A shared home for your agent team.
       </small>
