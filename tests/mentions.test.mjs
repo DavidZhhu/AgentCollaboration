@@ -176,11 +176,11 @@ test("upgrade preserves unread human requests without replaying old agent chatte
   const sqlite = new DatabaseSync(":memory:");
   try {
     const files = readdirSync("drizzle").filter(file => file.endsWith(".sql")).sort();
-    for (const file of files.filter(file => file < "0006")) sqlite.exec(readFileSync("drizzle/" + file, "utf8"));
+    for (const file of files.filter(file => file < "0007")) sqlite.exec(readFileSync("drizzle/" + file, "utf8"));
     sqlite.exec("INSERT INTO projects (id,name,created_at) VALUES ('p','Project',1)");
     for (const [id, role] of [["pm", "R0"], ["dev", "R01"]]) sqlite.prepare("INSERT INTO agents (id,project_id,name,role,provider,token_hash,last_seen,created_at) VALUES (?,'p',?,?,'Codex',?,100,1)").run(id, id, role, id);
     for (const [id, type, channel, time] of [["old", "human", "general", 50], ["general", "human", "general", 150], ["direct", "human", "dev", 200], ["agent", "agent", "general", 250]]) sqlite.prepare("INSERT INTO messages (id,project_id,author,author_type,channel,body,created_at) VALUES (?,'p','Author',?,?,?,?)").run(id, type, channel, id, time);
-    for (const file of files.filter(file => file >= "0006")) sqlite.exec(readFileSync("drizzle/" + file, "utf8"));
+    for (const file of files.filter(file => file >= "0007")) sqlite.exec(readFileSync("drizzle/" + file, "utf8"));
     assert.deepEqual(sqlite.prepare("SELECT message_id,agent_id FROM message_deliveries ORDER BY message_id").all().map(row => [row.message_id, row.agent_id]), [["direct", "dev"], ["general", "pm"]]);
     assert.equal(sqlite.prepare("SELECT count(*) AS n FROM messages").get().n, 4);
   } finally { sqlite.close(); }

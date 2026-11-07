@@ -2,6 +2,7 @@ import { sqliteTable, text, integer, primaryKey, index } from "drizzle-orm/sqlit
 export const projects = sqliteTable("projects", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
+  description: text("description").notNull().default(""),
   direction: text("direction").notNull().default(""),
   repo: text("repo").notNull().default(""),
   deletedAt: integer("deleted_at"),

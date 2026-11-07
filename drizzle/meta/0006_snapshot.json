@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "3229b5d0-7e99-42f4-b341-bf4bcc0f6061",
+  "id": "3b27d2f3-9cef-467c-895b-c9284a6cab42",
   "prevId": "25e3f072-a556-4cfa-8e8c-3ae3a1f0341a",
   "tables": {
     "accounts": {
@@ -785,93 +785,6 @@
       "uniqueConstraints": {},
       "checkConstraints": {}
     },
-    "message_deliveries": {
-      "name": "message_deliveries",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "message_id": {
-          "name": "message_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "agent_id": {
-          "name": "agent_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "status": {
-          "name": "status",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'queued'"
-        },
-        "received_at": {
-          "name": "received_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "responding_at": {
-          "name": "responding_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "replied_at": {
-          "name": "replied_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "message_deliveries_message_id_messages_id_fk": {
-          "name": "message_deliveries_message_id_messages_id_fk",
-          "tableFrom": "message_deliveries",
-          "tableTo": "messages",
-          "columnsFrom": [
-            "message_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "message_deliveries_agent_id_agents_id_fk": {
-          "name": "message_deliveries_agent_id_agents_id_fk",
-          "tableFrom": "message_deliveries",
-          "tableTo": "agents",
-          "columnsFrom": [
-            "agent_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {}
-    },
     "messages": {
       "name": "messages",
       "columns": {
@@ -918,36 +831,6 @@
           "notNull": true,
           "autoincrement": false
         },
-        "mentions": {
-          "name": "mentions",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'[]'"
-        },
-        "author_agent_id": {
-          "name": "author_agent_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "reply_to": {
-          "name": "reply_to",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "notification_depth": {
-          "name": "notification_depth",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": 0
-        },
         "created_at": {
           "name": "created_at",
           "type": "integer",
@@ -964,19 +847,6 @@
           "tableTo": "projects",
           "columnsFrom": [
             "project_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "messages_author_agent_id_agents_id_fk": {
-          "name": "messages_author_agent_id_agents_id_fk",
-          "tableFrom": "messages",
-          "tableTo": "agents",
-          "columnsFrom": [
-            "author_agent_id"
           ],
           "columnsTo": [
             "id"
@@ -1005,6 +875,14 @@
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "''"
         },
         "direction": {
           "name": "direction",

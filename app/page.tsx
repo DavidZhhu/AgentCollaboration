@@ -33,6 +33,7 @@ import {
 } from "lucide-react";
 import "./workspace.css";
 import Link from "next/link";
+import { resolveProjectSelection } from "./project-selection";
 import { readApiResponse } from "./api-response";
 import GithubPanel from "../components/github-panel";
 const empty = {
@@ -90,11 +91,11 @@ export default function Home() {
       }
       if (!r.ok) throw new Error(d.error);
       setData(d);
-      setProjectId((p) =>
-        d.projects.some((project: any) => project.id === p)
-          ? p
-          : d.projects[0]?.id || "",
-      );
+      setProjectId((current) => resolveProjectSelection(
+        d.projects, current, d.account_id, {
+          getItem: (key) => window.localStorage.getItem(key),
+        },
+      ));
       setError("");
     } catch (e: any) {
       setError(e.message);
@@ -107,6 +108,16 @@ export default function Home() {
     const interval = setInterval(refresh, 5000);
     return () => clearInterval(interval);
   }, []);
+  useEffect(() => {
+    if (!data.account_id) return;
+    try {
+      const key = `agentcollab:project:${data.account_id}`;
+      if (projectId) localStorage.setItem(key, projectId);
+      else localStorage.removeItem(key);
+    } catch {
+      // The workspace remains usable if browser storage is blocked.
+    }
+  }, [projectId, data.account_id]);
   const project = data.projects.find((p: any) => p.id === projectId),
     agents = data.agents.filter((a: any) => a.project_id === projectId),
     cards = data.cards.filter(
@@ -207,6 +218,8 @@ export default function Home() {
         const pid = crypto.randomUUID();
         await act({ action: "project", project_id: pid, ...f });
         setProjectId(pid);
+      } else if (modal === "edit-project") {
+        await act({ action: "update_project", project_id: selected.id, ...f });
       } else if (modal === "agent") {
         const d = await act({ action: "agent", ...f });
         setToken(d.token);
@@ -481,6 +494,11 @@ export default function Home() {
                 Recently deleted
               </button>
               {project && (
+                <button className="secondary" onClick={() => open("edit-project", project)}>
+                  <Settings2 size={15} /> Project settings
+                </button>
+              )}
+              {project && (
                 <button
                   className="delete-icon"
                   aria-label="Delete project"
@@ -499,6 +517,7 @@ export default function Home() {
               </button>
             </div>
           </div>
+          {project?.description && <p className="notice">{project.description}</p>}
           {error && (
             <div className="error" role="alert">
               {error}
@@ -857,7 +876,7 @@ export default function Home() {
             >
               <X size={20} />
             </button>
-            {["project", "agent", "task", "direction", "approve"].includes(
+            {["project", "edit-project", "agent", "task", "direction", "approve"].includes(
               modal,
             ) && (
               <form onSubmit={submit}>
@@ -867,6 +886,7 @@ export default function Home() {
                     (
                       {
                         project: "Create a project",
+                        "edit-project": "Project settings",
                         agent: "Connect an agent",
                         task: "New task card",
                         direction: "Propose a direction",
@@ -904,6 +924,16 @@ export default function Home() {
                         placeholder="https://github.com/your-team/project"
                       />
                     </label>
+                  </>
+                )}
+                {modal === "edit-project" && (
+                  <>
+                    <p>Update the project’s details. Development direction is managed separately through PM approvals.</p>
+                    <label>Project name<input name="name" required maxLength={100} defaultValue={selected.name} /></label>
+                    <label>Description<textarea name="description" maxLength={5000} defaultValue={selected.description || ""} placeholder="What is this project about?" /></label>
+                    <label>GitHub repository URL<input name="repo" type="url" maxLength={500} defaultValue={selected.repo || ""} placeholder="https://github.com/owner/repository" /></label>
+                    <p className="notice">This URL is a project reference. Manage the connected repository and live sync in GitHub.</p>
+                    <button type="button" className="danger" onClick={() => open("delete-project", selected)}><Trash2 size={15} /> Delete project</button>
                   </>
                 )}
                 {modal === "agent" && (
@@ -1071,6 +1101,8 @@ export default function Home() {
                     ? "Saving…"
                     : modal === "approve"
                       ? "Record approval"
+                      : modal === "edit-project"
+                        ? "Save changes"
                       : modal === "agent"
                         ? "Create agent connection"
                         : modal === "task"
@@ -1273,6 +1305,7 @@ export default function Home() {
                     </button>
                   ))}
                 </div>
+                <button className="secondary" onClick={() => open("trash")}><RotateCcw size={14} /> Recently deleted</button>
                 <button className="primary" onClick={() => open("project")}>
                   <Plus size={16} />
                   New project

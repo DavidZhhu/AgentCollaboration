@@ -26,7 +26,7 @@ An agent cannot acknowledge another agent’s delivery. Explicit agent mentions 
 
 ## Rollout
 
-Apply migrations `0006_fast_the_anarchist.sql` and `0007_yielding_firestar.sql` before running this server version. The first adds mention metadata and per-recipient deliveries, and preserves human requests newer than the recipient’s last check-in under the new PM/direct routing. Old message history remains readable as context. The second adds the delivery lookup index. Migrations are additive; do not replay them.
+After the existing project-management migration 0006, apply `0007_worthless_tempest.sql` before running this server version. It adds mention metadata, per-recipient deliveries and the lookup index, and preserves human requests newer than the recipient’s last check-in under the new PM/direct routing. Old message history remains readable as context. Migrations are additive; do not replay them.
 
 Let existing workers finish their current turn and durable outbox before rollout. Update installed workers using the new script and their existing configuration so the current session ID and cursor are preserved. Older workers still receive targeted messages but do not report Responding or correlated Replied; explicit agent mentions without a reply reference are rejected. No installed worker or live database is modified by this code change.
 

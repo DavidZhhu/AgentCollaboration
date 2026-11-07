@@ -1,1 +1,0 @@
-CREATE INDEX `message_deliveries_agent_idx` ON `message_deliveries` (`agent_id`,`message_id`);

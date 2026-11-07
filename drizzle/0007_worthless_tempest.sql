@@ -10,13 +10,13 @@ CREATE TABLE `message_deliveries` (
 	FOREIGN KEY (`agent_id`) REFERENCES `agents`(`id`) ON UPDATE no action ON DELETE no action
 );
 --> statement-breakpoint
+CREATE INDEX `message_deliveries_agent_idx` ON `message_deliveries` (`agent_id`,`message_id`);--> statement-breakpoint
 ALTER TABLE `messages` ADD `mentions` text DEFAULT '[]' NOT NULL;--> statement-breakpoint
 ALTER TABLE `messages` ADD `author_agent_id` text REFERENCES agents(id);--> statement-breakpoint
 ALTER TABLE `messages` ADD `reply_to` text;--> statement-breakpoint
 ALTER TABLE `messages` ADD `notification_depth` integer DEFAULT 0 NOT NULL;
 --> statement-breakpoint
--- Preserve human requests posted since the recipient last checked in.
--- Older history remains available as context without replaying agent chatter.
+-- Preserve unread human requests without replaying historical agent chatter.
 INSERT INTO message_deliveries (id,message_id,agent_id,status)
 SELECT m.id || ':' || a.id,m.id,a.id,'queued'
 FROM messages m JOIN agents a ON a.project_id=m.project_id
