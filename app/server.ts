@@ -349,6 +349,22 @@ export async function handle(
         break;
       }
 
+      case "update_project": {
+        if (agent) return json({ error: "Human access required." }, 403);
+        const name = required(body.name, "a project name", 100);
+        const description = body.description ?? "";
+        const repo = body.repo ?? "";
+        if (typeof description !== "string" || description.length > 5000)
+          throw new Error("Enter a description up to 5000 characters.");
+        if (typeof repo !== "string" || repo.length > 500)
+          throw new Error("Enter a GitHub repository URL up to 500 characters.");
+        const repository = repo.trim();
+        if (repository && !/^https:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\/?$/.test(repository))
+          throw new Error("Use a GitHub repository URL such as https://github.com/owner/repository.");
+        await db.prepare("UPDATE projects SET name=?,description=?,repo=? WHERE id=? AND deleted_at IS NULL")
+          .bind(name, description.trim(), repository, projectId).run();
+        break;
+      }
       case "project": {
         if (agent) return json({ error: "Human access required." }, 403);
         const name = required(body.name, "a project name", 100);

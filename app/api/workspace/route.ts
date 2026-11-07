@@ -12,7 +12,7 @@ async function workspace(request: Request) {
   if (request.method === "GET" && response.ok) {
     const body = (await response.json()) as Record<string, unknown>;
     return Response.json(
-      { ...body, account_role: account.role },
+      { ...body, account_role: account.role, account_id: account.id },
       { headers: { "Cache-Control": "no-store" } },
     );
   }

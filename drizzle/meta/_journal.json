@@ -43,6 +43,13 @@
       "when": 1793985005323,
       "tag": "0005_careless_firebrand",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1794015114891,
+      "tag": "0006_sour_joshua_kane",
+      "breakpoints": true
     }
   ]
 }
