@@ -125,8 +125,9 @@ class SessionRelayTests(unittest.TestCase):
                 def call(self, **kwargs): return {'worker_online':False,'agent':{'id':'test-agent','name':'R0','role':'R0','provider':'Claude Code'}}
             output=io.StringIO()
             original=subprocess.run
-            with patch.object(relay.request,'urlopen',return_value=io.BytesIO(json.dumps(grant).encode())), patch.object(relay,'Api',Health), patch.object(relay.Path,'home',return_value=root), patch.object(relay.subprocess,'run',wraps=original) as calls, contextlib.redirect_stdout(output):
+            with patch.object(relay.request,'urlopen',return_value=io.BytesIO(json.dumps(grant).encode())) as setup_request, patch.object(relay,'Api',Health), patch.object(relay.Path,'home',return_value=root), patch.object(relay.subprocess,'run',wraps=original) as calls, contextlib.redirect_stdout(output):
                 relay.configure(SimpleNamespace(site='https://test.invalid',code='single-use-test-code',workspace=None,provider='claude',agent_id='test-agent',label='Existing PM'))
+            self.assertEqual(setup_request.call_args.args[0].get_header('User-agent'), relay.USER_AGENT)
             self.assertTrue(all(call.args[0][0]=='git' for call in calls.call_args_list))
             self.assertEqual(len(calls.call_args_list),2)
             self.assertNotIn('ac_private_config_test',output.getvalue())
@@ -135,6 +136,13 @@ class SessionRelayTests(unittest.TestCase):
             self.assertEqual(private[0].stat().st_mode & 0o777,0o600)
             self.assertEqual(json.loads(private[0].read_text())['token'],'ac_private_config_test')
             self.assertIn('watch_command',json.loads(output.getvalue()))
+
+    def test_api_requests_identify_the_session_helper(self):
+        api = relay.Api({'site': 'https://test.invalid', 'token': 'test', 'controller_id': 'id'})
+        for body in (None, {'action': 'worker_heartbeat', 'status': 'idle'}):
+            with patch.object(relay.request, 'urlopen', return_value=io.BytesIO(b'{}')) as opened:
+                api.call(body)
+                self.assertEqual(opened.call_args.args[0].get_header('User-agent'), relay.USER_AGENT)
 
     def test_private_configuration_and_reject_bad_origins(self):
         with tempfile.TemporaryDirectory() as folder:

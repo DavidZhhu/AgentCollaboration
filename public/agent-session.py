@@ -17,6 +17,8 @@ import time
 from urllib import error, parse, request
 import uuid
 
+USER_AGENT = 'AgentCollaboration-Session/1.0'
+
 
 def save(path, value):
     path = Path(path)
@@ -59,7 +61,7 @@ class Api:
             url += '?status=1'
         elif cursor:
             url += '?' + parse.urlencode({'after': cursor[0], 'after_id': cursor[1]})
-        headers = {'Authorization': 'Bearer ' + self.config['token'], 'X-AgentCollab-Worker': self.config['controller_id']}
+        headers = {'User-Agent': USER_AGENT, 'Authorization': 'Bearer ' + self.config['token'], 'X-AgentCollab-Worker': self.config['controller_id']}
         if body is not None:
             headers['Content-Type'] = 'application/json'
         req = request.Request(url, data=json.dumps(body).encode() if body is not None else None, headers=headers)
@@ -239,7 +241,7 @@ def check_checkout(folder, repo):
 def configure(args):
     site = https_site(args.site)
     if args.code:
-        req = request.Request(site + '/api/setup/exchange', data=json.dumps({'code': args.code}).encode(), headers={'Content-Type': 'application/json'})
+        req = request.Request(site + '/api/setup/exchange', data=json.dumps({'code': args.code}).encode(), headers={'Content-Type': 'application/json', 'User-Agent': USER_AGENT})
         try:
             with request.urlopen(req, timeout=30) as response:
                 grant = json.load(response)
