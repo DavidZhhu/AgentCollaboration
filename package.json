@@ -6,6 +6,7 @@
     "node": ">=22.13.0"
   },
   "scripts": {
+    "test:mentions": "node --test tests/mentions.test.mjs && python3 -m unittest discover -s tests -p 'test_mentions_worker.py'",
     "test:github": "node --test tests/github.test.mjs",
     "install:ci": "node scripts/install-ci.mjs",
     "dev": "node scripts/run-framework.mjs dev",

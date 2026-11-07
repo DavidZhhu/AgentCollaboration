@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState, useRef } from "react";
+import { MentionComposer, MentionMessage, MessageDeliveries } from "../components/mention-chat";
 import {
   Layers,
   LayoutDashboard,
@@ -17,7 +18,6 @@ import {
   Copy,
   GitPullRequest as Github,
   CircleHelp,
-  Send,
   Circle,
   CheckCircle2,
   Clock3,
@@ -75,7 +75,6 @@ export default function Home() {
     [loading, setLoading] = useState(true),
     [saving, setSaving] = useState(false),
     [channel, setChannel] = useState("general"),
-    [text, setText] = useState(""),
     [token, setToken] = useState(""),
     [copied, setCopied] = useState(false),
     [query, setQuery] = useState(""),
@@ -234,14 +233,6 @@ export default function Home() {
       setModal("");
     } catch {}
   }
-  async function send(e: React.FormEvent) {
-    e.preventDefault();
-    if (!text.trim()) return;
-    try {
-      await act({ action: "message", channel, body: text });
-      setText("");
-    } catch {}
-  }
   async function copy(value: string) {
     try {
       await navigator.clipboard.writeText(value);
@@ -337,33 +328,16 @@ export default function Home() {
                     })}
                   </time>
                 </div>
-                <p>{m.body}</p>
+                <MentionMessage body={m.body} mentions={m.mentions} />
+                <MessageDeliveries agents={agents} deliveries={(data.message_deliveries || []).filter((delivery: { message_id: string }) => delivery.message_id === m.id)} />
               </div>
             </div>
           ))
         )}
         <div ref={end} />
       </div>
-      <form className="composer" onSubmit={send}>
-        <input
-          aria-label="Message"
-          placeholder={
-            channel === "general"
-              ? "Message the team…"
-              : "Message this conversation…"
-          }
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          disabled={!project}
-        />
-        <button
-          className="send"
-          aria-label="Send message"
-          disabled={saving || !text.trim()}
-        >
-          <Send size={16} />
-        </button>
-      </form>
+      <MentionComposer key={`${projectId}:${channel}`} agents={agents} channel={channel} disabled={!project} saving={saving}
+        onSend={(body, mentions) => act({ action: "message", channel, body, mentions })} />
       <div className="chat-note">
         Visible to project members · Clear approvals can be recorded by the PM
       </div>

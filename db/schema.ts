@@ -52,8 +52,21 @@ export const messages = sqliteTable("messages", {
   authorType: text("author_type").notNull(),
   channel: text("channel").notNull().default("general"),
   body: text("body").notNull(),
+  mentions: text("mentions").notNull().default("[]"),
+  authorAgentId: text("author_agent_id").references(() => agents.id),
+  replyTo: text("reply_to"),
+  notificationDepth: integer("notification_depth").notNull().default(0),
   createdAt: integer("created_at").notNull(),
 });
+export const messageDeliveries = sqliteTable("message_deliveries", {
+  id: text("id").primaryKey(),
+  messageId: text("message_id").notNull().references(() => messages.id),
+  agentId: text("agent_id").notNull().references(() => agents.id),
+  status: text("status").notNull().default("queued"),
+  receivedAt: integer("received_at"),
+  respondingAt: integer("responding_at"),
+  repliedAt: integer("replied_at"),
+}, (table) => [index("message_deliveries_agent_idx").on(table.agentId, table.messageId)]);
 export const decisions = sqliteTable("decisions", {
   id: text("id").primaryKey(),
   projectId: text("project_id")
