@@ -170,7 +170,7 @@ class Session:
         config = self.config
         req = request.Request(config['site'] + '/api/agent', data=json.dumps(pending['body']).encode(), headers={
             'Authorization': 'Bearer ' + config['token'], 'X-AgentCollab-Worker': config['controller_id'],
-            'Content-Type': 'application/json', 'X-AgentCollab-Request-ID': pending['id']})
+            'User-Agent': USER_AGENT, 'Content-Type': 'application/json', 'X-AgentCollab-Request-ID': pending['id']})
         try:
             with request.urlopen(req, timeout=30) as response:
                 return json.load(response)

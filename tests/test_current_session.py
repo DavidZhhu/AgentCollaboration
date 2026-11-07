@@ -144,6 +144,18 @@ class SessionRelayTests(unittest.TestCase):
                 api.call(body)
                 self.assertEqual(opened.call_args.args[0].get_header('User-agent'), relay.USER_AGENT)
 
+    def test_website_actions_identify_helper_and_keep_retry_identity(self):
+        with tempfile.TemporaryDirectory() as folder:
+            session, _ = self.make_session(folder)
+            for body in ({'action': 'claim', 'card_id': 'card'}, {'action': 'setup_check_result', 'nonce': 'challenge', 'summary': 'Ready'}):
+                pending = {'id': 'stable-retry-id', 'body': body}
+                with patch.object(relay.request, 'urlopen', return_value=io.BytesIO(b'{"ok":true}')) as opened:
+                    self.assertEqual(session.request_action(pending), {'ok': True})
+                    req = opened.call_args.args[0]
+                    self.assertEqual(req.get_header('User-agent'), relay.USER_AGENT)
+                    self.assertEqual(req.get_header('X-agentcollab-request-id'), pending['id'])
+                    self.assertEqual(json.loads(req.data), body)
+
     def test_private_configuration_and_reject_bad_origins(self):
         with tempfile.TemporaryDirectory() as folder:
             session, _ = self.make_session(folder)
