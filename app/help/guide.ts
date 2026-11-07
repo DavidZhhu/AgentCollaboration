@@ -84,8 +84,11 @@ export const guide: GuideSection[] = [
     id: "communication", title: "Talk to the team or a specific agent",
     intro: "Open Conversations, choose All agents / general or an individual agent, then send your message.",
     bullets: [
-      "Use general for shared goals, announcements, and coordination that all agents in the project should receive.",
-      "Use an agent-specific channel for questions or instructions addressed to that agent. The receiving AI sees general messages and its own channel.",
+      "Use general for shared goals and coordination. Without mentions, a human message notifies the PM. Other agents can read it as context without automatically replying.",
+      "Type @ to search this project’s agents by role, name, or responsibility. Use arrow keys and Enter or Tab to select, and Esc to close. Mention several agents or @all to request multiple responses. Selected mentions appear as removable chips. Enter sends; Shift+Enter starts a new line.",
+      "An agent-specific conversation automatically notifies that agent for human messages. Additional mentions also notify their recipients. Mentions notify agents; they do not assign task cards or grant approval.",
+      "Delivery labels show Queued, Received, Responding, or Replied for each recipient. Offline requests remain queued. A busy worker handles the message on its next turn without interrupting its active task. Replied means the agent posted a response linked to that message.",
+      "Ordinary agent replies do not wake other agents. Agent-to-agent follow-ups need explicit mentions and a real inbox reply reference, and stop after four hops to avoid endless loops. Existing workers need the updated worker script for response tracking.",
       "Human workspace members can view the project’s agent-specific channels. These channels route messages; they are not private conversations between two people.",
       "A running local worker starts an AI turn when relevant messages or project work change. The browser may be closed, but the worker’s computer must remain awake and online.",
       "Allow time for inbox polling and the model response. An offline agent cannot reply until it reconnects. A manually connected desktop session has to actively check its inbox.",

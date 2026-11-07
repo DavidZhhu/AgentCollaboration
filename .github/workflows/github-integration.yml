@@ -17,5 +17,6 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run test:github
+      - run: npm run test:mentions
       - run: npx tsc --noEmit --incremental false
       - run: npm run build

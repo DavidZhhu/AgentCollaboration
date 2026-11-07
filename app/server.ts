@@ -1,3 +1,5 @@
+import { resolveMentions, type MentionAgent } from "./mentions";
+
 const json = (value: unknown, status = 200) =>
   Response.json(value, { status, headers: { "Cache-Control": "no-store" } });
 const id = () => crypto.randomUUID();
@@ -169,7 +171,7 @@ export async function handle(
         const preciseCursor = url.searchParams.has("after_id") ? 1 : 0;
         const msgs = await db
           .prepare(
-            "SELECT * FROM messages WHERE project_id=? AND (created_at>? OR (?=1 AND created_at=? AND id>?)) AND (channel='general' OR channel=?) ORDER BY created_at,id LIMIT 100",
+            "SELECT m.* FROM messages m JOIN message_deliveries d ON d.message_id=m.id WHERE m.project_id=? AND (m.created_at>? OR (?=1 AND m.created_at=? AND m.id>?)) AND d.agent_id=? ORDER BY m.created_at,m.id LIMIT 100",
           )
           .bind(
             agent.project_id,
@@ -180,6 +182,14 @@ export async function handle(
             agent.id,
           )
           .all();
+        if (msgs.results.length) {
+          await db.batch(msgs.results.map((msg) => db.prepare(
+            "UPDATE message_deliveries SET status=CASE WHEN status='queued' THEN 'received' ELSE status END,received_at=COALESCE(received_at,?) WHERE message_id=? AND agent_id=?",
+          ).bind(now, msg.id, agent.id)));
+        }
+        const context = await db.prepare(
+          "SELECT * FROM (SELECT * FROM messages WHERE project_id=? AND (channel='general' OR channel=?) ORDER BY created_at DESC,id DESC LIMIT 80) ORDER BY created_at,id",
+        ).bind(agent.project_id, agent.id).all();
         const project = await db
           .prepare("SELECT id,name,direction,repo FROM projects WHERE id=?")
           .bind(agent.project_id)
@@ -220,6 +230,9 @@ export async function handle(
           active_card: active,
           next_card: next,
           messages: msgs.results,
+          context_messages: context.results,
+          routing_version: 1,
+          mention_agents: (await db.prepare("SELECT id,name,role,responsibility FROM agents WHERE project_id=? AND deleted_at IS NULL").bind(agent.project_id).all()).results,
           team,
           setup_check: await db.prepare("SELECT nonce,created_at FROM setup_checks WHERE agent_id=? AND status='pending' AND created_at>?").bind(agent.id, now - 600000).first(),
           setup_verified: !!(await db.prepare("SELECT agent_id FROM setup_checks WHERE agent_id=? AND status='passed'").bind(agent.id).first()),
@@ -257,6 +270,9 @@ export async function handle(
       const decisions = await db
         .prepare("SELECT * FROM decisions ORDER BY created_at DESC")
         .all();
+      const deliveries = await db.prepare(
+        "SELECT d.* FROM message_deliveries d JOIN (SELECT id FROM messages ORDER BY created_at DESC LIMIT 500) m ON m.id=d.message_id",
+      ).all();
       return json({
         projects: projects.results,
         deleted_projects: deletedProjects.results,
@@ -264,6 +280,7 @@ export async function handle(
         agents: agents.results,
         cards: cards.results,
         messages: messages.results,
+        message_deliveries: deliveries.results,
         decisions: decisions.results,
         user:
           account?.username ||
@@ -574,7 +591,55 @@ export async function handle(
             .first())
         )
           throw new Error("Conversation not found.");
-        await message(required(body.body, "a message"), channel).run();
+        // Keep offsets relative to the original body, including leading spaces.
+        required(body.body, "a message");
+        const text = body.body as string;
+        const team = await db.prepare(
+          "SELECT id,name,role FROM agents WHERE project_id=? AND deleted_at IS NULL AND (account_id IS NULL OR EXISTS (SELECT 1 FROM accounts WHERE accounts.id=agents.account_id AND accounts.enabled=1))",
+        ).bind(projectId).all<MentionAgent>();
+        if (channel !== "general" && !team.results.some(item => item.id === channel))
+          throw new Error("This conversation is no longer available.");
+        const mentions = resolveMentions(text, team.results, body.mentions);
+        let parent: { id: string; notification_depth: number } | null = null;
+        if (body.reply_to) {
+          parent = await db.prepare("SELECT * FROM messages WHERE id=? AND project_id=?")
+            .bind(required(body.reply_to, "a reply message", 100), projectId).first<{ id: string; notification_depth: number }>();
+          if (!parent || (agent && !(await db.prepare("SELECT id FROM message_deliveries WHERE message_id=? AND agent_id=?")
+            .bind(parent.id, agent.id).first()))) throw new Error("Reply message not found in your inbox.");
+        }
+        if (agent && mentions.length && !parent)
+          throw new Error("Agent mentions require reply_to from your inbox.");
+        const depth = agent ? (parent?.notification_depth || 0) + 1 : 0;
+        const recipients = new Set<string>();
+        for (const mention of mentions) {
+          if (mention.agent_id === "all") team.results.forEach(item => recipients.add(item.id));
+          else recipients.add(mention.agent_id);
+        }
+        if (!agent) {
+          if (channel !== "general") recipients.add(channel);
+          else if (!mentions.length) team.results.filter(isPm).forEach(item => recipients.add(item.id));
+        }
+        if (agent) recipients.delete(agent.id);
+        if (depth > 4 && recipients.size) throw new Error("Agent follow-up limit reached. Ask a human to continue the conversation.");
+        const statements = [db.prepare(
+          "INSERT OR IGNORE INTO messages (id,project_id,author,author_type,channel,body,created_at,mentions,author_agent_id,reply_to,notification_depth) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+        ).bind(mutationId, projectId, author, authorType, channel, text, now, JSON.stringify(mentions), agent?.id || null, parent?.id || null, depth)];
+        for (const recipient of recipients) statements.push(db.prepare(
+          "INSERT OR IGNORE INTO message_deliveries (id,message_id,agent_id,status) VALUES (?,?,?,'queued')",
+        ).bind(mutationId + ":" + recipient, mutationId, recipient));
+        if (agent && parent) statements.push(db.prepare(
+          "UPDATE message_deliveries SET status='replied',replied_at=COALESCE(replied_at,?) WHERE message_id=? AND agent_id=?",
+        ).bind(now, parent.id, agent.id));
+        await db.batch(statements);
+        break;
+      }
+      case "message_delivery": {
+        if (!agent) return json({ error: "Agent access required." }, 403);
+        if (!["responding", "received"].includes(body.status) || !Array.isArray(body.message_ids) || body.message_ids.length > 100 || body.message_ids.some((value: unknown) => typeof value !== "string"))
+          throw new Error("Invalid message acknowledgement.");
+        if (body.message_ids.length) await db.batch(body.message_ids.map((messageId: string) => db.prepare(
+          "UPDATE message_deliveries SET status=?,responding_at=CASE WHEN ?='responding' THEN ? ELSE responding_at END WHERE message_id=? AND agent_id=? AND status!='replied'",
+        ).bind(body.status, body.status, now, messageId, agent.id)));
         break;
       }
       case "decision": {
