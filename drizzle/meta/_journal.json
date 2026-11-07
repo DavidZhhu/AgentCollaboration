@@ -43,6 +43,13 @@
       "when": 1793985005323,
       "tag": "0005_careless_firebrand",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1793988770069,
+      "tag": "0006_romantic_ultragirl",
+      "breakpoints": true
     }
   ]
 }

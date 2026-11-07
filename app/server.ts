@@ -63,6 +63,8 @@ export async function handle(
           role: agent.role,
           provider: agent.provider,
         },
+        connection_mode: agent.connection_mode,
+        controller_label: agent.controller_label,
         worker_status: agent.worker_status,
         worker_seen: agent.worker_seen,
         worker_error: agent.worker_error,
@@ -76,11 +78,15 @@ export async function handle(
         return json({ error: "A valid worker identity is required." }, 400);
       if (!["idle", "running", "error", "stopped"].includes(body.status))
         return json({ error: "Invalid worker status." }, 400);
+      const mode = body.mode === "session" ? "session" : "worker";
+      const label = typeof body.label === "string" ? body.label.trim().slice(0, 120) : "";
       const result = await db
         .prepare(
-          "UPDATE agents SET worker_id=?,worker_seen=?,worker_status=?,worker_error=? WHERE id=? AND (worker_id=? OR worker_seen IS NULL OR worker_seen<? OR worker_id IS NULL) RETURNING id",
+          "UPDATE agents SET connection_mode=?,controller_label=?,worker_id=?,worker_seen=?,worker_status=?,worker_error=? WHERE id=? AND (worker_id=? OR worker_seen IS NULL OR worker_seen<? OR worker_id IS NULL) RETURNING id",
         )
         .bind(
+          mode,
+          label,
           body.status === "stopped" ? null : workerId,
           now,
           body.status,
@@ -92,7 +98,7 @@ export async function handle(
         .first();
       if (!result)
         return json(
-          { error: "Another worker currently controls this agent." },
+          { error: "Another worker or conversation currently controls this role. Stop its watcher or worker before handing it over." },
           409,
         );
       return json({ ok: true });
@@ -103,7 +109,7 @@ export async function handle(
       agent.worker_id !== workerId
     )
       return json(
-        { error: "A background worker currently controls this agent." },
+        { error: "Another worker or conversation currently controls this role. Use its configured session client, or stop that connection first." },
         409,
       );
     if (agent && body?.action === "setup_check_result") {
@@ -189,7 +195,7 @@ export async function handle(
           const results = await db.batch([
             db
               .prepare(
-                "SELECT id,name,role,provider,responsibility,last_seen,status,worker_seen,worker_status,worker_error FROM agents WHERE project_id=? AND deleted_at IS NULL",
+                "SELECT id,name,role,provider,responsibility,connection_mode,controller_label,last_seen,status,worker_seen,worker_status,worker_error FROM agents WHERE project_id=? AND deleted_at IS NULL",
               )
               .bind(agent.project_id),
             db
@@ -221,6 +227,8 @@ export async function handle(
           next_card: next,
           messages: msgs.results,
           team,
+          connection_mode: agent.connection_mode,
+          controller_label: agent.controller_label,
           setup_check: await db.prepare("SELECT nonce,created_at FROM setup_checks WHERE agent_id=? AND status='pending' AND created_at>?").bind(agent.id, now - 600000).first(),
           setup_verified: !!(await db.prepare("SELECT agent_id FROM setup_checks WHERE agent_id=? AND status='passed'").bind(agent.id).first()),
           server_time: now,
@@ -233,7 +241,7 @@ export async function handle(
         .all();
       const agents = await db
         .prepare(
-          "SELECT id,project_id,name,role,provider,responsibility,account_id,status,last_seen,worker_id,worker_seen,worker_status,worker_error,created_at FROM agents WHERE deleted_at IS NULL ORDER BY created_at",
+          "SELECT id,project_id,name,role,provider,responsibility,account_id,connection_mode,controller_label,status,last_seen,worker_id,worker_seen,worker_status,worker_error,created_at FROM agents WHERE deleted_at IS NULL ORDER BY created_at",
         )
         .all();
       const deletedProjects = await db
